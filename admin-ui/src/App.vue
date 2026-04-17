@@ -46,6 +46,32 @@
           <span class="nx-nav-prefix">[WKF]</span>
           <span>工作流</span>
         </el-menu-item>
+        <el-sub-menu index="/proxy">
+          <template #title>
+            <span class="nx-nav-prefix">[PXY]</span>
+            <span>代理池管理</span>
+          </template>
+          <el-menu-item index="/proxy/dashboard">
+            <span class="nx-nav-prefix">[DAS]</span>
+            <span>数据看板</span>
+          </el-menu-item>
+          <el-menu-item index="/proxy/ips">
+            <span class="nx-nav-prefix">[IPS]</span>
+            <span>IP 管理</span>
+          </el-menu-item>
+          <el-menu-item index="/proxy/scripts">
+            <span class="nx-nav-prefix">[SCN]</span>
+            <span>扫描脚本</span>
+          </el-menu-item>
+          <el-menu-item index="/proxy/accounts">
+            <span class="nx-nav-prefix">[ACT]</span>
+            <span>账号池</span>
+          </el-menu-item>
+          <el-menu-item index="/proxy/gateway">
+            <span class="nx-nav-prefix">[GW]</span>
+            <span>代理网关</span>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
 
       <div class="nx-sidebar-footer">
@@ -98,6 +124,7 @@ const activeRoute = computed(() => {
   const p = route.path
   if (p.startsWith('/knowledge/') || p === '/knowledge-list') return '/knowledge-list'
   if (p.startsWith('/agents/') || p === '/agents') return '/agents'
+  if (p.startsWith('/proxy/')) return p
   return p
 })
 

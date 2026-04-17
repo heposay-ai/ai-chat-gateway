@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS api_key (
     key_prefix VARCHAR(10) NOT NULL COMMENT '明文前缀，用于展示: sk-abc***',
     name VARCHAR(100) COMMENT 'Key 名称（用户自定义）',
     tenant_id BIGINT NOT NULL COMMENT '所属租户',
-    status TINYINT DEFAULT 1 COMMENT '1启用 0禁用',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
     rate_limit INT DEFAULT 60 COMMENT '每分钟最大请求数',
     allowed_models VARCHAR(500) COMMENT '允许使用的模型列表，逗号分隔，空=全部',
     expires_at DATETIME COMMENT '过期时间，null=永不过期',
@@ -125,8 +125,8 @@ CREATE TABLE IF NOT EXISTS agent (
     system_prompt TEXT NOT NULL COMMENT '系统提示词',
     model_id VARCHAR(50) NOT NULL DEFAULT 'deepseek-chat' COMMENT '使用的模型ID',
     tools_config JSON COMMENT '启用的工具列表 ["web_search","knowledge_base:3"]',
-    is_template TINYINT DEFAULT 0 COMMENT '1=预设模板 0=用户自建',
-    status TINYINT DEFAULT 1 COMMENT '1启用 0禁用',
+    is_template BIT(1) DEFAULT 0 COMMENT '1=预设模板 0=用户自建',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_tenant (tenant_id),
@@ -159,6 +159,62 @@ CREATE TABLE IF NOT EXISTS agent_chat_message (
     INDEX idx_session (session_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 租户表
+CREATE TABLE IF NOT EXISTS tenant (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL COMMENT '租户名称',
+    contact_email VARCHAR(200) COMMENT '联系邮箱',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
+    monthly_quota BIGINT DEFAULT 1000000 COMMENT '月配额',
+    daily_quota BIGINT DEFAULT 100000 COMMENT '日配额',
+    monthly_used BIGINT DEFAULT 0 COMMENT '月已用',
+    daily_used BIGINT DEFAULT 0 COMMENT '日已用',
+    quota_reset_day INT DEFAULT 1 COMMENT '月配额重置日',
+    last_daily_reset DATE COMMENT '上次日重置时间',
+    last_monthly_reset DATE COMMENT '上次月重置时间',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 提示词模板表
+CREATE TABLE IF NOT EXISTS prompt_template (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT NOT NULL COMMENT '所属租户',
+    name VARCHAR(100) NOT NULL COMMENT '模板名称',
+    description VARCHAR(500) COMMENT '描述',
+    category VARCHAR(50) COMMENT '分类',
+    content TEXT NOT NULL COMMENT '模板内容',
+    variables JSON COMMENT '变量定义',
+    version INT DEFAULT 1 COMMENT '当前版本号',
+    is_public BIT(1) DEFAULT 0 COMMENT '是否公开',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_tenant (tenant_id),
+    INDEX idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 提示词模板版本表
+CREATE TABLE IF NOT EXISTS prompt_template_version (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    template_id BIGINT NOT NULL COMMENT '所属模板',
+    version INT NOT NULL COMMENT '版本号',
+    content TEXT NOT NULL COMMENT '模板内容',
+    variables JSON COMMENT '变量定义',
+    change_note VARCHAR(500) COMMENT '变更说明',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_template (template_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 模板收藏表
+CREATE TABLE IF NOT EXISTS template_favorite (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT NOT NULL COMMENT '租户ID',
+    template_id BIGINT NOT NULL COMMENT '模板ID',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE INDEX idx_tenant_template (tenant_id, template_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- W5: 工作流定义表
 CREATE TABLE IF NOT EXISTS agent_workflow (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -169,4 +225,101 @@ CREATE TABLE IF NOT EXISTS agent_workflow (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- 代理池子系统 (Proxy Pool Subsystem)
+-- ============================================================
+
+-- 原始 IP 列表
+CREATE TABLE IF NOT EXISTS proxy_ip (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ip VARCHAR(255) NOT NULL COMMENT 'IP地址(支持IPv6)',
+    port INT NOT NULL COMMENT '端口',
+    protocol VARCHAR(10) DEFAULT 'http' COMMENT 'http/https',
+    source VARCHAR(100) COMMENT '来源标识',
+    region VARCHAR(50) COMMENT '地区',
+    tags VARCHAR(500) COMMENT '标签(逗号分隔)',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/scanning/active/inactive',
+    last_scan_at DATETIME COMMENT '最后扫描时间',
+    remark VARCHAR(500) COMMENT '备注',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status (status),
+    INDEX idx_source (source)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 扫描脚本配置
+CREATE TABLE IF NOT EXISTS scan_script (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL COMMENT '脚本名称',
+    description VARCHAR(500) COMMENT '描述',
+    script_type VARCHAR(20) NOT NULL DEFAULT 'python' COMMENT 'python/shell',
+    script_path VARCHAR(500) COMMENT '脚本文件路径',
+    default_params JSON COMMENT '默认参数',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 账号池
+CREATE TABLE IF NOT EXISTS proxy_account (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) COMMENT '账号名称/别名',
+    endpoint_url VARCHAR(500) NOT NULL COMMENT 'API端点URL',
+    api_key VARCHAR(256) COMMENT 'API Key',
+    supported_models JSON COMMENT '支持的模型列表',
+    provider VARCHAR(50) COMMENT '供应商标识',
+    health_status VARCHAR(20) NOT NULL DEFAULT 'unknown' COMMENT 'healthy/unhealthy/unknown',
+    health_check_at DATETIME COMMENT '最后健康检查时间',
+    health_message VARCHAR(500) COMMENT '健康检查详情',
+    total_requests BIGINT DEFAULT 0 COMMENT '累计请求数',
+    total_tokens_used BIGINT DEFAULT 0 COMMENT '累计token用量',
+    total_cost DECIMAL(12,4) DEFAULT 0 COMMENT '累计费用',
+    last_used_at DATETIME COMMENT '最后使用时间',
+    source_ip_id BIGINT COMMENT '关联原始IP',
+    weight INT DEFAULT 1 COMMENT '权重(负载均衡)',
+    max_rpm INT COMMENT '最大RPM',
+    extra_info JSON COMMENT '扩展信息',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status (status),
+    INDEX idx_health (health_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 代理请求日志
+CREATE TABLE IF NOT EXISTS proxy_request_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT COMMENT '关联账号',
+    account_name VARCHAR(100) COMMENT '账号名称(冗余)',
+    model VARCHAR(50) COMMENT '请求模型',
+    prompt_tokens INT DEFAULT 0,
+    completion_tokens INT DEFAULT 0,
+    total_tokens INT DEFAULT 0,
+    estimated_cost DECIMAL(10,6) DEFAULT 0 COMMENT '估算费用',
+    duration_ms INT COMMENT '耗时(ms)',
+    status VARCHAR(20) COMMENT 'success/error',
+    error_message TEXT COMMENT '错误信息',
+    client_ip VARCHAR(45) COMMENT '客户端IP',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_account_time (account_id, created_at),
+    INDEX idx_model_time (model, created_at),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 扫描任务
+CREATE TABLE IF NOT EXISTS scan_task (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT COMMENT '关联脚本',
+    target_ips LONGTEXT COMMENT '目标IP列表',
+    params JSON COMMENT '执行参数',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/running/completed/failed',
+    result_summary JSON COMMENT '结果摘要',
+    log_output LONGTEXT COMMENT '执行日志',
+    started_at DATETIME COMMENT '开始时间',
+    completed_at DATETIME COMMENT '完成时间',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_script (script_id),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

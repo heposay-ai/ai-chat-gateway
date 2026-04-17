@@ -17,6 +17,12 @@ const routes = [
   { path: '/agents', component: () => import('../views/AgentList.vue'), meta: { title: 'Agent 管理' } },
   { path: '/agents/:id/chat', component: () => import('../views/AgentChat.vue'), meta: { title: 'Agent 对话' } },
   { path: '/workflows', component: () => import('../views/AgentWorkflow.vue'), meta: { title: '工作流' } },
+  // 代理池子系统
+  { path: '/proxy/dashboard', component: () => import('../views/proxy/ProxyDashboard.vue'), meta: { title: '代理池看板' } },
+  { path: '/proxy/ips', component: () => import('../views/proxy/ProxyIpList.vue'), meta: { title: 'IP 管理' } },
+  { path: '/proxy/scripts', component: () => import('../views/proxy/ScanScriptList.vue'), meta: { title: '扫描脚本' } },
+  { path: '/proxy/accounts', component: () => import('../views/proxy/ProxyAccountList.vue'), meta: { title: '账号池' } },
+  { path: '/proxy/gateway', component: () => import('../views/proxy/ProxyGateway.vue'), meta: { title: '代理网关' } },
   // W4 分享链接（独立页面，无侧边栏）
   { path: '/share/:token', component: () => import('../views/SharedChat.vue'), meta: { title: '知识库问答', layout: 'blank' } },
 ]
