@@ -129,6 +129,27 @@ proxy:
   gateway:
     unsupported-params: context_management,prompt_caching,allowed_openai_params,top_p,top_k,betas
 
+# 工作流引擎配置 (W6)
+workflow:
+  execution:
+    timeout-seconds: 300
+    node-timeout-seconds: 60
+  code-executor:
+    timeout-ms: 5000
+    max-output-length: 10000
+  http-executor:
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+    blocked-hosts:
+      - 127.0.0.1
+      - localhost
+      - 0.0.0.0
+      - 169.254.169.254
+  approval:
+    default-timeout-hours: 48
+  scheduler:
+    enabled: false
+
 # Agent 工具配置 (W5)
 agent:
   tools:
