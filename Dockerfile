@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17-jre-alpine
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 COPY target/ai-chat-gateway-1.0.0.jar app.jar

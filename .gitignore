@@ -34,9 +34,16 @@ uploads/
 ### Test data ###
 ai-knowlege.txt
 test-knowledge.txt
+001.txt
+src/test/java/com/example/aichat/proxy/service/LitellmScannerDiscoverTest.java
 
 ### Dev scratch ###
 dev/
 
+### Root-level stray files ###
+/package.json
+/package-lock.json
+
 ### Workflow output ###
 workflow-output/
+.ace-tool/

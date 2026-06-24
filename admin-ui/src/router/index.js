@@ -16,7 +16,17 @@ const routes = [
   // W5 Agent
   { path: '/agents', component: () => import('../views/AgentList.vue'), meta: { title: 'Agent 管理' } },
   { path: '/agents/:id/chat', component: () => import('../views/AgentChat.vue'), meta: { title: 'Agent 对话' } },
-  { path: '/workflows', component: () => import('../views/AgentWorkflow.vue'), meta: { title: '工作流' } },
+  // W6 工作流引擎
+  { path: '/workflows', component: () => import('../views/workflow/WorkflowList.vue'), meta: { title: '工作流管理' } },
+  { path: '/workflows/new', component: () => import('../views/workflow/WorkflowEditor.vue'), meta: { title: '创建工作流' } },
+  { path: '/workflows/:id', component: () => import('../views/workflow/WorkflowEditor.vue'), meta: { title: '编辑工作流' } },
+  { path: '/workflows/:id/execution', component: () => import('../views/workflow/WorkflowExecution.vue'), meta: { title: '执行监控' } },
+  // 代理池子系统
+  { path: '/proxy/dashboard', component: () => import('../views/proxy/ProxyDashboard.vue'), meta: { title: '代理池看板' } },
+  { path: '/proxy/ips', component: () => import('../views/proxy/ProxyIpList.vue'), meta: { title: 'IP 管理' } },
+  { path: '/proxy/scripts', component: () => import('../views/proxy/ScanScriptList.vue'), meta: { title: '扫描脚本' } },
+  { path: '/proxy/accounts', component: () => import('../views/proxy/ProxyAccountList.vue'), meta: { title: '账号池' } },
+  { path: '/proxy/gateway', component: () => import('../views/proxy/ProxyGateway.vue'), meta: { title: '代理网关' } },
   // W4 分享链接（独立页面，无侧边栏）
   { path: '/share/:token', component: () => import('../views/SharedChat.vue'), meta: { title: '知识库问答', layout: 'blank' } },
 ]
