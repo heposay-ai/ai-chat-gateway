@@ -6,13 +6,17 @@ import com.example.aichat.rag.model.RagResponse;
 import com.example.aichat.rag.repository.KnowledgeDocumentRepository;
 import com.example.aichat.rag.service.IndexingPipeline;
 import com.example.aichat.rag.service.RagService;
+import com.example.aichat.rag.service.VectorStoreService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -25,13 +29,16 @@ public class RagController {
     private final IndexingPipeline indexingPipeline;
     private final RagService ragService;
     private final KnowledgeDocumentRepository documentRepo;
+    private final VectorStoreService vectorStoreService;
 
     public RagController(IndexingPipeline indexingPipeline,
                          RagService ragService,
-                         KnowledgeDocumentRepository documentRepo) {
+                         KnowledgeDocumentRepository documentRepo,
+                         VectorStoreService vectorStoreService) {
         this.indexingPipeline = indexingPipeline;
         this.ragService = ragService;
         this.documentRepo = documentRepo;
+        this.vectorStoreService = vectorStoreService;
     }
 
     // ========== 文档管理 ==========
@@ -46,7 +53,9 @@ public class RagController {
                 file.getOriginalFilename(), file.getSize() / 1024, tenantId);
 
         KnowledgeDocument doc = indexingPipeline.saveFile(file, tenantId);
-        indexingPipeline.processAsync(doc.getId(), doc.getFilePath());
+        if (!doc.isDuplicate()) {
+            indexingPipeline.processAsync(doc.getId(), doc.getFilePath());
+        }
         return doc;
     }
 
@@ -62,6 +71,7 @@ public class RagController {
     /**
      * 删除文档
      */
+    @Transactional
     @DeleteMapping("/documents/{id}")
     public Map<String, String> deleteDocument(@PathVariable Long id) {
         Long tenantId = RequestContext.get("tenantId");
@@ -69,8 +79,25 @@ public class RagController {
         if (doc == null || !doc.getTenantId().equals(tenantId)) {
             return Map.of("status", "not_found");
         }
+        if (doc.getStatus() != null && (doc.getStatus() == 0 || doc.getStatus() == 1)) {
+            return Map.of("status", "error", "message", "文档正在索引中，请稍后再试");
+        }
+        vectorStoreService.removeByDocumentId(id);
+        deleteFileOnDisk(doc);
         documentRepo.delete(doc);
+        log.info("[RAG] 删除文档: id={}, fileName={}", id, doc.getFileName());
         return Map.of("status", "deleted");
+    }
+
+    private void deleteFileOnDisk(KnowledgeDocument doc) {
+        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(doc.getFilePath()));
+        } catch (Exception e) {
+            log.warn("[RAG] 清理磁盘文件失败: path={}, error={}", doc.getFilePath(), e.getMessage());
+        }
     }
 
     /**

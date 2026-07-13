@@ -46,6 +46,10 @@
           <span class="nx-nav-prefix">[WKF]</span>
           <span>工作流</span>
         </el-menu-item>
+        <el-menu-item index="/mcp-test">
+          <span class="nx-nav-prefix">[MCP]</span>
+          <span>MCP 测试</span>
+        </el-menu-item>
         <el-sub-menu index="/proxy">
           <template #title>
             <span class="nx-nav-prefix">[PXY]</span>

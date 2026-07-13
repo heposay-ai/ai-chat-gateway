@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -54,9 +55,10 @@ public class WorkflowEngine {
         Map<String, WorkflowNode> nodeMap = new LinkedHashMap<>();
         nodes.forEach(n -> nodeMap.put(n.getNodeKey(), n));
 
-        // 构建邻接表和入度表
-        Map<String, List<String>> adjacency = buildAdjacencyList(edges);
-        Map<String, Integer> inDegree = buildInDegreeMap(nodeMap.keySet(), edges);
+        // 每条入边都需要被解析为“选中”或“跳过”，汇合节点才能正确推进
+        Map<String, List<WorkflowEdge>> outgoingEdges = buildOutgoingEdges(edges);
+        Map<String, Integer> unresolvedIncoming = buildInDegreeMap(nodeMap.keySet(), edges);
+        Map<String, Integer> activeIncoming = new HashMap<>();
 
         // 初始化执行上下文
         WorkflowContext ctx = new WorkflowContext(
@@ -65,11 +67,12 @@ public class WorkflowEngine {
         sendEvent(emitter, "execution_start",
             "{\"executionId\":" + execution.getId() + ",\"workflowName\":\"workflow\"}");
 
-        Set<String> executedNodes = new HashSet<>();
+        Set<String> executedNodes = ConcurrentHashMap.newKeySet();
+        Set<String> skippedNodes = new HashSet<>();
 
         // BFS 拓扑排序执行
         Queue<String> ready = new LinkedList<>();
-        for (var entry : inDegree.entrySet()) {
+        for (var entry : unresolvedIncoming.entrySet()) {
             if (entry.getValue() == 0) {
                 ready.add(entry.getKey());
             }
@@ -97,15 +100,12 @@ public class WorkflowEngine {
                 break;
             }
 
-            // 更新入度，推进下一批节点
+            // 解析所有出边。未命中的条件分支也必须释放下游汇合节点的依赖。
             for (String nodeKey : batch) {
-                for (String nextKey : adjacency.getOrDefault(nodeKey, List.of())) {
-                    if (shouldTraverse(nodeKey, nextKey, ctx, nodeMap, edges)) {
-                        int newDegree = inDegree.merge(nextKey, -1, Integer::sum);
-                        if (newDegree == 0) {
-                            ready.add(nextKey);
-                        }
-                    }
+                for (WorkflowEdge edge : outgoingEdges.getOrDefault(nodeKey, List.of())) {
+                    boolean active = shouldTraverse(nodeKey, ctx, nodeMap, edge);
+                    resolveIncomingEdge(edge.getTargetNodeKey(), active, unresolvedIncoming,
+                        activeIncoming, outgoingEdges, ready, skippedNodes);
                 }
             }
         }
@@ -219,39 +219,72 @@ public class WorkflowEngine {
         }
     }
 
-    private boolean shouldTraverse(String sourceKey, String targetKey,
-                                    WorkflowContext ctx,
-                                    Map<String, WorkflowNode> nodeMap,
-                                    List<WorkflowEdge> edges) {
+    private boolean shouldTraverse(String sourceKey,
+                                   WorkflowContext ctx,
+                                   Map<String, WorkflowNode> nodeMap,
+                                   WorkflowEdge edge) {
         WorkflowNode sourceNode = nodeMap.get(sourceKey);
         if (!"CONDITION".equals(sourceNode.getNodeType())) {
             return true;
         }
 
         String branchResult = ctx.getNodeOutput(sourceKey);
-        for (WorkflowEdge edge : edges) {
-            if (edge.getSourceNodeKey().equals(sourceKey)
-                && edge.getTargetNodeKey().equals(targetKey)) {
-                String edgeCondition = edge.getConditionExpression();
-                if (edgeCondition != null) {
-                    return branchResult != null && branchResult.equals(edgeCondition);
-                }
-                String edgeLabel = edge.getLabel();
-                if (edgeLabel != null) {
-                    return branchResult != null && branchResult.equals(edgeLabel);
-                }
-            }
+        String edgeCondition = edge.getConditionExpression();
+        if (edgeCondition != null) {
+            return branchResult != null && branchResult.equals(edgeCondition);
+        }
+        String edgeLabel = edge.getLabel();
+        if (edgeLabel != null) {
+            return branchResult != null && branchResult.equals(edgeLabel);
         }
         return true;
     }
 
-    private Map<String, List<String>> buildAdjacencyList(List<WorkflowEdge> edges) {
-        Map<String, List<String>> adj = new HashMap<>();
-        for (WorkflowEdge edge : edges) {
-            adj.computeIfAbsent(edge.getSourceNodeKey(), k -> new ArrayList<>())
-               .add(edge.getTargetNodeKey());
+    private void resolveIncomingEdge(String targetKey,
+                                     boolean active,
+                                     Map<String, Integer> unresolvedIncoming,
+                                     Map<String, Integer> activeIncoming,
+                                     Map<String, List<WorkflowEdge>> outgoingEdges,
+                                     Queue<String> ready,
+                                     Set<String> skippedNodes) {
+        if (active) {
+            activeIncoming.merge(targetKey, 1, Integer::sum);
         }
-        return adj;
+        int unresolved = unresolvedIncoming.merge(targetKey, -1, Integer::sum);
+        if (unresolved != 0) {
+            return;
+        }
+
+        if (activeIncoming.getOrDefault(targetKey, 0) > 0) {
+            ready.add(targetKey);
+            return;
+        }
+
+        skipNodeAndResolveDownstream(targetKey, unresolvedIncoming, activeIncoming,
+            outgoingEdges, ready, skippedNodes);
+    }
+
+    private void skipNodeAndResolveDownstream(String nodeKey,
+                                              Map<String, Integer> unresolvedIncoming,
+                                              Map<String, Integer> activeIncoming,
+                                              Map<String, List<WorkflowEdge>> outgoingEdges,
+                                              Queue<String> ready,
+                                              Set<String> skippedNodes) {
+        if (!skippedNodes.add(nodeKey)) {
+            return;
+        }
+        for (WorkflowEdge edge : outgoingEdges.getOrDefault(nodeKey, List.of())) {
+            resolveIncomingEdge(edge.getTargetNodeKey(), false, unresolvedIncoming,
+                activeIncoming, outgoingEdges, ready, skippedNodes);
+        }
+    }
+
+    private Map<String, List<WorkflowEdge>> buildOutgoingEdges(List<WorkflowEdge> edges) {
+        Map<String, List<WorkflowEdge>> outgoing = new HashMap<>();
+        for (WorkflowEdge edge : edges) {
+            outgoing.computeIfAbsent(edge.getSourceNodeKey(), key -> new ArrayList<>()).add(edge);
+        }
+        return outgoing;
     }
 
     private Map<String, Integer> buildInDegreeMap(Set<String> nodeKeys, List<WorkflowEdge> edges) {

@@ -8,7 +8,7 @@
         </div>
       </template>
 
-      <el-table :data="keys" stripe>
+      <el-table :data="keys" stripe v-if="keys.length > 0">
         <el-table-column prop="keyId" label="Key 标识" width="220">
           <template #default="{ row }">
             <span class="nx-mono">{{ row.keyId }}</span>
@@ -51,6 +51,12 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div v-else style="text-align: center; padding: 60px 20px; color: var(--nx-text-muted)">
+        <p style="font-size: 48px; margin-bottom: 16px;">🔑</p>
+        <p>还没有 API Key，请点击右上角「创建 Key」新建</p>
+        <el-button type="primary" style="margin-top: 16px" @click="showCreateDialog = true">创建 Key</el-button>
+      </div>
     </el-card>
 
     <!-- 创建对话框 -->

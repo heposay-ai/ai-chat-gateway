@@ -60,9 +60,13 @@ public class ChatController {
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(
             @RequestParam String message,
-            @RequestParam(required = false, defaultValue = "deepseek-chat") String model) {
-        log.info("[流式聊天] model={}, message长度={}", model, message != null ? message.length() : 0);
-        return chatService.streamChat(message, model);
+            @RequestParam(required = false, defaultValue = "deepseek-chat") String model,
+            @RequestParam(required = false) Long kbId,
+            @RequestParam(required = false) String baseUrl,
+            @RequestParam(required = false) String apiKey,
+            @RequestParam(required = false) String modelName) {
+        log.info("[流式聊天] model={}, message长度={}, kbId={}, 自定义baseUrl={}, 自定义modelName={}", model, message != null ? message.length() : 0, kbId, baseUrl != null && !baseUrl.isBlank(), modelName);
+        return chatService.streamChat(message, model, kbId, baseUrl, apiKey, modelName);
     }
 
     // === Day3-4: 模型列表 ===
@@ -120,7 +124,9 @@ public class ChatController {
      */
     private ChatRequest applyTemplate(ChatRequest request) {
         if (request.templateId() == null) return request;
-        String rendered = promptTemplateService.render(request.templateId(), request.variables());
-        return new ChatRequest(rendered, request.model(), null, null);
+        Long tenantId = com.example.aichat.context.RequestContext.get("tenantId");
+        String rendered = promptTemplateService.render(request.templateId(), request.variables(),
+                request.message(), tenantId);
+        return new ChatRequest(rendered, request.model(), null, null, request.kbId());
     }
 }

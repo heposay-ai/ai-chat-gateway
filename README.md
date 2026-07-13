@@ -152,6 +152,11 @@ ai-chat-gateway/
 | `SERPER_API_KEY` | 否 | Serper 搜索 API Key |
 | `RERANK_API_KEY` | 否 | Rerank 服务 API Key |
 | `PGVECTOR_PASSWORD` | 是 | PostgreSQL 密码 |
+| `DASHSCOPE_MEMORY_ENABLED` | 否 | 是否启用长期记忆，默认 `false` |
+| `DASHSCOPE_MEMORY_LIBRARY_ID` | 否 | 阿里云百炼长期记忆库 ID，不填使用默认记忆库 |
+| `DASHSCOPE_MEMORY_BASE_URL` | 否 | 长期记忆 API 地址，默认 `https://dashscope.aliyuncs.com/api/v2/apps/memory` |
+| `DASHSCOPE_MEMORY_TOP_K` | 否 | 记忆召回数量，默认 `5` |
+| `DASHSCOPE_MEMORY_MIN_SCORE` | 否 | 记忆召回最低相似度，默认 `0.3` |
 
 ## License
 

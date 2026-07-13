@@ -1,9 +1,10 @@
 package com.example.aichat.rag.service;
 
+import com.example.aichat.rag.splitter.ChineseDocumentSplitter;
+
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
-import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.segment.TextSegment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,9 +22,9 @@ public class ChunkService {
     private final DocumentSplitter splitter;
 
     public ChunkService(
-            @Value("${rag.chunk.size:500}") int chunkSize,
-            @Value("${rag.chunk.overlap:50}") int overlap) {
-        this.splitter = DocumentSplitters.recursive(chunkSize, overlap);
+            @Value("${rag.chunk.size:900}") int chunkSize,
+            @Value("${rag.chunk.overlap:150}") int overlap) {
+        this.splitter = new ChineseDocumentSplitter(chunkSize, overlap);
         log.info("[切片服务] 初始化: chunkSize={}, overlap={}", chunkSize, overlap);
     }
 

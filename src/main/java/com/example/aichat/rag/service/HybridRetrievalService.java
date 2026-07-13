@@ -53,6 +53,24 @@ public class HybridRetrievalService {
         List<EmbeddingMatch<TextSegment>> vectorResults =
                 vectorStoreService.search(query, vectorTopK, minScore, tenantId);
 
+        return mergeWithBm25(query, topK, vectorResults);
+    }
+
+    /**
+     * 按知识库 ID 混合检索，供 W4 知识库问答使用。
+     */
+    public List<HybridMatch> hybridSearchByKb(String query, int topK, Long kbId) {
+        log.info("[混合检索] query='{}', topK={}, kbId={}", query, topK, kbId);
+
+        int vectorTopK = topK * 2;
+        List<EmbeddingMatch<TextSegment>> vectorResults =
+                vectorStoreService.searchByKb(query, vectorTopK, minScore, kbId);
+
+        return mergeWithBm25(query, topK, vectorResults);
+    }
+
+    private List<HybridMatch> mergeWithBm25(String query, int topK,
+                                            List<EmbeddingMatch<TextSegment>> vectorResults) {
         // 2. BM25 关键词检索（用向量检索的结果作为语料库 — 因为 BM25 是内存实现）
         // 这里把所有向量检索到的片段作为 BM25 的候选集
         List<TextSegment> corpus = vectorResults.stream()
@@ -77,7 +95,7 @@ public class HybridRetrievalService {
 
         // BM25 得分归一化并合并
         if (!corpus.isEmpty()) {
-            Map<String, Double> bm25Scores = bm25Service.searchWithScores(query, corpus, vectorTopK);
+            Map<String, Double> bm25Scores = bm25Service.searchWithScores(query, corpus, topK);
             double maxBm25 = bm25Scores.values().stream().mapToDouble(Double::doubleValue).max().orElse(1);
 
             for (EmbeddingMatch<TextSegment> match : vectorResults) {

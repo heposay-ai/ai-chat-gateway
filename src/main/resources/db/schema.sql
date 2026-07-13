@@ -1,3 +1,23 @@
+-- 租户表
+CREATE TABLE IF NOT EXISTS tenant (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL COMMENT '租户名称',
+    contact_email VARCHAR(200) COMMENT '联系邮箱',
+    status INT DEFAULT 1 COMMENT '1启用 0禁用',
+    monthly_quota BIGINT DEFAULT 1000000 COMMENT '月配额(tokens)',
+    daily_quota BIGINT DEFAULT 100000 COMMENT '日配额(tokens)',
+    monthly_used BIGINT DEFAULT 0 COMMENT '月已用',
+    daily_used BIGINT DEFAULT 0 COMMENT '日已用',
+    quota_reset_day INT DEFAULT 1 COMMENT '月配额重置日',
+    last_daily_reset DATE COMMENT '上次日配额重置时间',
+    last_monthly_reset DATE COMMENT '上次月配额重置时间',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 默认租户
+INSERT IGNORE INTO tenant (id, name, status) VALUES (1, 'Default Tenant', 1);
+
 -- API Key 表
 CREATE TABLE IF NOT EXISTS api_key (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -66,6 +86,7 @@ CREATE TABLE IF NOT EXISTS knowledge_document (
     file_name VARCHAR(255) NOT NULL COMMENT '原始文件名',
     file_path VARCHAR(500) COMMENT '存储路径',
     file_size BIGINT COMMENT '文件大小(bytes)',
+    file_hash VARCHAR(64) COMMENT '文件SHA-256哈希',
     content_type VARCHAR(100) COMMENT 'MIME类型',
     char_count INT DEFAULT 0 COMMENT '提取的字符数',
     chunk_count INT DEFAULT 0 COMMENT '切片数量',
@@ -74,7 +95,8 @@ CREATE TABLE IF NOT EXISTS knowledge_document (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_tenant (tenant_id),
-    INDEX idx_kb (kb_id)
+    INDEX idx_kb (kb_id),
+    INDEX idx_kb_file_hash (tenant_id, kb_id, file_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- W4: 知识库表
@@ -268,6 +290,7 @@ CREATE TABLE IF NOT EXISTS proxy_account (
     name VARCHAR(100) COMMENT '账号名称/别名',
     endpoint_url VARCHAR(500) NOT NULL COMMENT 'API端点URL',
     api_key VARCHAR(256) COMMENT 'API Key',
+    auth_header VARCHAR(100) COMMENT '认证头信息',
     supported_models JSON COMMENT '支持的模型列表',
     provider VARCHAR(50) COMMENT '供应商标识',
     health_status VARCHAR(20) NOT NULL DEFAULT 'unknown' COMMENT 'healthy/unhealthy/unknown',
@@ -322,4 +345,102 @@ CREATE TABLE IF NOT EXISTS scan_task (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_script (script_id),
     INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- W6: 工作流引擎数据库表
+-- ============================================================
+
+-- 工作流定义
+CREATE TABLE IF NOT EXISTS workflow_definition (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id       BIGINT NOT NULL,
+    name            VARCHAR(100) NOT NULL COMMENT '工作流名称',
+    description     VARCHAR(500) COMMENT '描述',
+    status          VARCHAR(20) DEFAULT 'DRAFT' COMMENT 'DRAFT/PUBLISHED/ARCHIVED',
+    is_template     TINYINT(1) DEFAULT 0 COMMENT '是否模板',
+    category        VARCHAR(50) COMMENT '分类',
+    version         INT DEFAULT 1 COMMENT '版本号',
+    trigger_type    VARCHAR(20) DEFAULT 'MANUAL' COMMENT 'MANUAL/CRON/WEBHOOK',
+    trigger_config  JSON COMMENT '触发器配置',
+    webhook_token   VARCHAR(64) UNIQUE COMMENT 'Webhook令牌',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_wf_def_tenant (tenant_id),
+    INDEX idx_wf_def_template (is_template)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 工作流节点
+CREATE TABLE IF NOT EXISTS workflow_node (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id     BIGINT NOT NULL COMMENT '所属工作流',
+    node_key        VARCHAR(50) NOT NULL COMMENT '节点标识',
+    node_type       VARCHAR(20) NOT NULL COMMENT 'START/END/AGENT/TOOL/CONDITION/HTTP/KNOWLEDGE/CODE/PARALLEL/HUMAN_REVIEW',
+    label           VARCHAR(100) COMMENT '节点标签',
+    config          JSON COMMENT '节点配置',
+    position_x      DOUBLE DEFAULT 0 COMMENT 'X坐标',
+    position_y      DOUBLE DEFAULT 0 COMMENT 'Y坐标',
+    UNIQUE KEY uk_wf_node (workflow_id, node_key),
+    INDEX idx_wf_node_workflow (workflow_id),
+    FOREIGN KEY (workflow_id) REFERENCES workflow_definition(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 工作流边（连线）
+CREATE TABLE IF NOT EXISTS workflow_edge (
+    id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id          BIGINT NOT NULL COMMENT '所属工作流',
+    source_node_key      VARCHAR(50) NOT NULL COMMENT '源节点',
+    target_node_key      VARCHAR(50) NOT NULL COMMENT '目标节点',
+    condition_expression VARCHAR(500) COMMENT 'SpEL条件表达式',
+    label                VARCHAR(100) COMMENT '���线标签',
+    INDEX idx_wf_edge_workflow (workflow_id),
+    FOREIGN KEY (workflow_id) REFERENCES workflow_definition(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 工作流执行记录
+CREATE TABLE IF NOT EXISTS workflow_execution (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id     BIGINT NOT NULL COMMENT '所属工作流',
+    tenant_id       BIGINT NOT NULL COMMENT '所属租户',
+    status          VARCHAR(20) DEFAULT 'RUNNING' COMMENT 'RUNNING/COMPLETED/FAILED/PAUSED/CANCELLED',
+    input           LONGTEXT COMMENT '输入参数',
+    output          LONGTEXT COMMENT '输出结果',
+    trigger_type    VARCHAR(20) COMMENT '触发方式',
+    started_at      DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '开始时间',
+    finished_at     DATETIME COMMENT '完成时间',
+    error_message   TEXT COMMENT '错误信息',
+    INDEX idx_wf_exec_workflow (workflow_id),
+    INDEX idx_wf_exec_tenant (tenant_id),
+    FOREIGN KEY (workflow_id) REFERENCES workflow_definition(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 节点执行记录
+CREATE TABLE IF NOT EXISTS node_execution (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    execution_id    BIGINT NOT NULL COMMENT '所属执行',
+    node_key        VARCHAR(50) NOT NULL COMMENT '节点标识',
+    node_type       VARCHAR(20) NOT NULL COMMENT '节点类型',
+    status          VARCHAR(20) DEFAULT 'PENDING' COMMENT 'PENDING/RUNNING/COMPLETED/FAILED/SKIPPED',
+    input           LONGTEXT COMMENT '输入',
+    output          LONGTEXT COMMENT '输出',
+    started_at      DATETIME COMMENT '开始时间',
+    finished_at     DATETIME COMMENT '完成时间',
+    duration_ms     BIGINT COMMENT '耗时(ms)',
+    error_message   TEXT COMMENT '错误信息',
+    INDEX idx_node_exec_execution (execution_id),
+    FOREIGN KEY (execution_id) REFERENCES workflow_execution(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 人工审批记录
+CREATE TABLE IF NOT EXISTS workflow_approval (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    execution_id    BIGINT NOT NULL COMMENT '所属执行',
+    node_key        VARCHAR(50) NOT NULL COMMENT '节点标识',
+    status          VARCHAR(20) DEFAULT 'PENDING' COMMENT 'PENDING/APPROVED/REJECTED',
+    assignee        VARCHAR(100) COMMENT '审批人',
+    comment         TEXT COMMENT '审批意见',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    handled_at      DATETIME COMMENT '处理时间',
+    INDEX idx_wf_approval_execution (execution_id),
+    FOREIGN KEY (execution_id) REFERENCES workflow_execution(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

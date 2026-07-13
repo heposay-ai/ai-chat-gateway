@@ -40,7 +40,7 @@
             <div v-if="msg.sources && msg.sources.length" class="nx-sources-box">
               <div class="nx-sources-title">引用来源</div>
               <div v-for="(s, si) in msg.sources" :key="si" class="nx-source-item">
-                <span>{{ s.fileName }}</span>
+                <span>{{ s.fileName }}<span v-if="s.page"> · 第 {{ s.page }} 页</span></span>
                 <span class="nx-source-score">{{ (s.score * 100).toFixed(0) }}%</span>
               </div>
             </div>

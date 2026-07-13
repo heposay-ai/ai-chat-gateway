@@ -6,5 +6,6 @@ public record ChatRequest(
     String message,
     String model,
     Long templateId,
-    Map<String, String> variables
+    Map<String, String> variables,
+    Long kbId
 ) {}

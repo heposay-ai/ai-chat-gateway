@@ -34,7 +34,7 @@ public class Agent {
     @Column(name = "tools_config", columnDefinition = "JSON")
     private String toolsConfig;
 
-    @Column(name = "is_template")
+    @Column(name = "is_template", columnDefinition = "TINYINT(1)")
     private Boolean isTemplate = false;
 
     @Column

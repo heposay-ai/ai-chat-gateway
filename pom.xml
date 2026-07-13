@@ -77,6 +77,13 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
+        <!-- RAG: 阿里云百炼知识库 Retrieve API -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>bailian20231229</artifactId>
+            <version>2.13.1</version>
+        </dependency>
+
         <!-- RAG: 文档解析 (Apache Tika) -->
         <dependency>
             <groupId>dev.langchain4j</groupId>

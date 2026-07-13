@@ -7,7 +7,7 @@ const routes = [
   { path: '/templates', component: () => import('../views/TemplateManage.vue'), meta: { title: '模板管理' } },
   { path: '/chat', component: () => import('../views/ChatTest.vue'), meta: { title: '对话测试' } },
   // W3 原知识库页面（向后兼容）
-  { path: '/knowledge', component: () => import('../views/KnowledgeBase.vue'), meta: { title: '知识库(旧版)' } },
+  { path: '/knowledge', component: () => import('../views/KnowledgeBase.vue'), meta: { title: 'RAG 测试' } },
   // W4 知识库管理
   { path: '/knowledge-list', component: () => import('../views/KnowledgeBaseList.vue'), meta: { title: '知识库管理' } },
   { path: '/knowledge/:id', component: () => import('../views/KnowledgeBaseDetail.vue'), meta: { title: '知识库详情' } },
@@ -21,6 +21,7 @@ const routes = [
   { path: '/workflows/new', component: () => import('../views/workflow/WorkflowEditor.vue'), meta: { title: '创建工作流' } },
   { path: '/workflows/:id', component: () => import('../views/workflow/WorkflowEditor.vue'), meta: { title: '编辑工作流' } },
   { path: '/workflows/:id/execution', component: () => import('../views/workflow/WorkflowExecution.vue'), meta: { title: '执行监控' } },
+  { path: '/mcp-test', component: () => import('../views/McpTest.vue'), meta: { title: 'MCP 测试' } },
   // 代理池子系统
   { path: '/proxy/dashboard', component: () => import('../views/proxy/ProxyDashboard.vue'), meta: { title: '代理池看板' } },
   { path: '/proxy/ips', component: () => import('../views/proxy/ProxyIpList.vue'), meta: { title: 'IP 管理' } },

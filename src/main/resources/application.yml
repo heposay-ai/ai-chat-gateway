@@ -45,8 +45,9 @@ ai:
 
       # === 通义千问 (DashScope) ===
       qwen-plus:
-        provider: DASHSCOPE
+        provider: OPENAI
         api-key: ${DASHSCOPE_API_KEY:}
+        base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
         model-name: qwen-plus
         temperature: 0.7
         max-tokens: 2000
@@ -79,13 +80,17 @@ rag:
     password: ${PGVECTOR_PASSWORD:postgres}
   embedding:
     api-key: ${DASHSCOPE_API_KEY:}
-    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     model-name: text-embedding-v3
     dimension: 1024
+    batch-size: ${RAG_EMBEDDING_BATCH_SIZE:6}
+    batch-delay-ms: ${RAG_EMBEDDING_BATCH_DELAY_MS:200}
+    max-retries: ${RAG_EMBEDDING_MAX_RETRIES:3}
+    retry-base-delay-ms: ${RAG_EMBEDDING_RETRY_BASE_DELAY_MS:1000}
 
   chunk:
-    size: 500
-    overlap: 50
+    size: 900
+    overlap: 150
   hybrid:
     enabled: true          # 是否启用混合检索（向量+BM25）
     vector-weight: 0.7      # 向量检索权重
@@ -96,12 +101,36 @@ rag:
     api-key: ${RERANK_API_KEY:}
     base-url: ${RERANK_BASE_URL:https://api.cohere.ai}
     model: ${RERANK_MODEL:rerank-english-v2.0}
+  local-rerank:
+    enabled: true            # 外部 rerank 不可用或未配置时，使用本地关键词加权重排
+    keyword-boost: 0.08      # 命中规格关键词时的加分
+    normal-boost: 0.03       # 命中普通查询词时的加分
+    max-boost: 0.5           # 单个片段最高加分
+    keywords: pmic,ldo,dcdc,dc-dc,buck,boost,电压,电流,输出,路,通道,引脚,接口,寄存器,电源,规格,最大,最小
   chat:
     history-rounds: 5          # 多轮对话历史保留轮数
     rewrite-enabled: true      # 是否启用 query 改写
   retrieval:
-    max-results: 5
-    min-score: 0.75
+    provider: ${RAG_RETRIEVAL_PROVIDER:local} # local | bailian
+    max-results: 8
+    min-score: 0.55
+  indexing:
+    core-pool-size: ${RAG_INDEXING_CORE_POOL_SIZE:3}
+    max-pool-size: ${RAG_INDEXING_MAX_POOL_SIZE:4}
+    queue-capacity: ${RAG_INDEXING_QUEUE_CAPACITY:100}
+  bailian:
+    access-key-id: ${ALIBABA_CLOUD_ACCESS_KEY_ID:}
+    access-key-secret: ${ALIBABA_CLOUD_ACCESS_KEY_SECRET:}
+    endpoint: ${RAG_BAILIAN_ENDPOINT:bailian.cn-beijing.aliyuncs.com}
+    workspace-id: ${RAG_BAILIAN_WORKSPACE_ID:${WORKSPACE_ID:}}
+    index-id: ${RAG_BAILIAN_INDEX_ID:}
+    dense-top-k: ${RAG_BAILIAN_DENSE_TOP_K:30}
+    sparse-top-k: ${RAG_BAILIAN_SPARSE_TOP_K:30}
+    enable-reranking: ${RAG_BAILIAN_ENABLE_RERANKING:true}
+    enable-rewrite: ${RAG_BAILIAN_ENABLE_REWRITE:false}
+    rerank-top-n: ${RAG_BAILIAN_RERANK_TOP_N:8}
+    rerank-min-score: ${RAG_BAILIAN_RERANK_MIN_SCORE:0.2}
+    rerank-model: ${RAG_BAILIAN_RERANK_MODEL:qwen3-rerank-hybrid}
   document:
     upload-dir: ./uploads
     max-file-size: 50MB
@@ -112,6 +141,23 @@ rag:
       - text/plain
       - text/csv
       - text/markdown
+
+# 长期记忆配置（阿里云百炼 Model Studio Memory API）
+memory:
+  enabled: ${DASHSCOPE_MEMORY_ENABLED:false}
+  api-key: ${DASHSCOPE_API_KEY:}
+  base-url: ${DASHSCOPE_MEMORY_BASE_URL:https://dashscope.aliyuncs.com/api/v2/apps/memory}
+  library-id: ${DASHSCOPE_MEMORY_LIBRARY_ID:}
+  top-k: ${DASHSCOPE_MEMORY_TOP_K:5}
+  min-score: ${DASHSCOPE_MEMORY_MIN_SCORE:0.3}
+  enable-rewrite: ${DASHSCOPE_MEMORY_ENABLE_REWRITE:false}
+  enable-rerank: ${DASHSCOPE_MEMORY_ENABLE_RERANK:false}
+  profile-schema-ids: ${DASHSCOPE_MEMORY_PROFILE_SCHEMA_IDS:}
+  profile-write-schema-id: ${DASHSCOPE_MEMORY_PROFILE_WRITE_SCHEMA_ID:}
+
+# GitHub 导入配置
+github:
+  token: ${GITHUB_TOKEN:}
 
 # 代理池子系统配置
 proxy:
@@ -160,3 +206,22 @@ agent:
       model-id: ${LLM_SUMMARIZE_MODEL:deepseek-chat}
     file-writer:
       output-dir: ${FILE_WRITER_OUTPUT_DIR:./workflow-output}
+alipay:
+  ai-pay:
+    app-private-key: ${ALIPAY_APP_PRIVATE_KEY:}
+    alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+    app-id: ${ALIPAY_APP_ID:}
+    service-id: ${ALIPAY_SERVICE_ID:}
+    amount: ${ALIPAY_AMOUNT:0.01}
+    pay-before-minutes: ${ALIPAY_PAY_BEFORE_MINUTES:30}
+    sign-type: RSA2
+    charset: UTF-8
+    format: json
+    currency: CNY
+mcp:
+  server:
+    url: ${MCP_SERVER_URL:https://dashscope.aliyuncs.com/api/v1/mcps/alipay-ty/sse}
+  auth:
+    mode: ${MCP_AUTH_MODE:bearer}
+  api:
+    key: ${MCP_API_KEY:${DASHSCOPE_API_KEY:}}

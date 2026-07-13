@@ -32,7 +32,7 @@ public class ApiKey {
     private Integer status = 1;
 
     @Column(name = "rate_limit")
-    private Integer rateLimit = 60;
+    private Integer rateLimit = 600;
 
     @Column(name = "allowed_models", length = 500)
     private String allowedModels;

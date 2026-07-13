@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * TOOL 节点执行器
  * 调用 W5 的 ToolRegistry 中已注册的工具
- * config: {"toolName": "web_search", "inputTemplate": "{{userInput}}"}
+ * config: {"toolName": "knowledge_base", "inputTemplate": "{{userInput}}", "knowledgeBaseId": 1}
  */
 @Component
 public class ToolNodeExecutor implements NodeExecutor {
@@ -36,7 +36,10 @@ public class ToolNodeExecutor implements NodeExecutor {
                 ? config.get("inputTemplate").asText() : "{{userInput}}";
             String input = ctx.resolveTemplate(inputTemplate);
 
-            String result = toolRegistry.executeTool(toolName, input);
+            Long knowledgeBaseId = config.hasNonNull("knowledgeBaseId")
+                ? config.get("knowledgeBaseId").asLong()
+                : null;
+            String result = toolRegistry.executeTool(toolName, input, knowledgeBaseId);
             log.info("Tool 节点完成: tool={}, outputLen={}", toolName,
                 result != null ? result.length() : 0);
             return NodeResult.of(result);

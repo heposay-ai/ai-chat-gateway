@@ -10,7 +10,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/workflows")
+@RequestMapping("/api/agent-workflows")
 public class AgentWorkflowController {
 
     private final AgentWorkflowService workflowService;

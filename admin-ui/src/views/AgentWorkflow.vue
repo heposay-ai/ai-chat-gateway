@@ -216,7 +216,7 @@ async function executeRun() {
   const apiKey = localStorage.getItem('apiKey') || ''
 
   try {
-    const url = `/api/workflows/${runWfId.value}/run?input=${encodeURIComponent(runInput.value)}`
+    const url = `/api/agent-workflows/${runWfId.value}/run?input=${encodeURIComponent(runInput.value)}`
     const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } })
 
     if (!resp.ok) {

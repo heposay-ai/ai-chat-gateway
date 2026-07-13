@@ -65,12 +65,16 @@ public class AgentChatService {
             StreamingChatLanguageModel model = modelFactory.getStreamingModel(agent.getModelId());
             List<Object> tools = toolRegistry.getToolsForAgent(agent);
 
+            String mcpDesc = toolRegistry.getMcpToolDescription(agent);
+            String systemPrompt = mcpDesc.isEmpty() ? agent.getSystemPrompt()
+                    : agent.getSystemPrompt() + mcpDesc;
+
             var builder = AiServices.builder(AgentAssistant.class)
                     .streamingChatLanguageModel(model)
                     .chatMemoryProvider(memId -> MessageWindowChatMemory.builder()
                             .maxMessages(20)
                             .build())
-                    .systemMessageProvider(memId -> agent.getSystemPrompt());
+                    .systemMessageProvider(memId -> systemPrompt);
 
             if (!tools.isEmpty()) {
                 builder.tools(tools);

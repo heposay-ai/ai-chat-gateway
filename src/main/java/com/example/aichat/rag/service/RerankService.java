@@ -34,6 +34,10 @@ public class RerankService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    public boolean isConfigured() {
+        return "local".equals(provider) || (apiKey != null && !apiKey.isBlank());
+    }
+
     /**
      * 对候选文档重排序
      *
@@ -53,12 +57,8 @@ public class RerankService {
                 return rerankCohere(query, documents, topN);
             }
         } catch (Exception e) {
-            log.warn("[Rerank] 重排序失败，降级返回原顺序: {}", e.getMessage());
-            // 降级：返回原顺序的前 topN 个
-            return documents.stream()
-                    .limit(topN)
-                    .map(text -> new RerankResult(documents.indexOf(text), 1.0, text))
-                    .toList();
+            log.warn("[Rerank] 重排序失败，交由调用方使用本地重排兜底: {}", e.getMessage());
+            return List.of();
         }
     }
 

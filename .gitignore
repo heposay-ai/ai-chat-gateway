@@ -9,6 +9,7 @@ target/
 *.iml
 *.ipr
 .vscode/
+.claude/
 *.swp
 *.swo
 
@@ -47,3 +48,7 @@ dev/
 ### Workflow output ###
 workflow-output/
 .ace-tool/
+
+### Stray files ###
+/admin-ui/figure.html
+nul

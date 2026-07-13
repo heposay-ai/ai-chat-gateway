@@ -85,8 +85,10 @@ public class KnowledgeBaseController {
         kbService.getByIdAndTenant(kbId, tenantId); // 验证归属
 
         KnowledgeDocument doc = indexingPipeline.saveFile(file, tenantId, kbId);
-        indexingPipeline.processAsync(doc.getId(), doc.getFilePath());
-        kbService.refreshDocCount(kbId);
+        if (!doc.isDuplicate()) {
+            indexingPipeline.processAsync(doc.getId(), doc.getFilePath());
+            kbService.refreshDocCount(kbId);
+        }
         return doc;
     }
 
@@ -117,9 +119,30 @@ public class KnowledgeBaseController {
     public Map<String, String> deleteDocument(@PathVariable Long kbId, @PathVariable Long docId) {
         Long tenantId = RequestContext.get("tenantId");
         kbService.getByIdAndTenant(kbId, tenantId);
-        docRepo.deleteById(docId);
-        kbService.refreshDocCount(kbId);
+        kbService.deleteDocument(kbId, docId);
         return Map.of("status", "deleted");
+    }
+
+    @PostMapping("/{kbId}/documents/batch-delete")
+    public Map<String, Object> batchDeleteDocuments(@PathVariable Long kbId,
+                                                    @RequestBody Map<String, List<Long>> body) {
+        Long tenantId = RequestContext.get("tenantId");
+        kbService.getByIdAndTenant(kbId, tenantId);
+        int deleted = kbService.deleteDocuments(kbId, body.get("docIds"));
+        return Map.of("status", "deleted", "deleted", deleted);
+    }
+
+    @PostMapping("/{kbId}/documents/{docId}/reindex")
+    public Map<String, String> reindexDocument(@PathVariable Long kbId, @PathVariable Long docId) {
+        Long tenantId = RequestContext.get("tenantId");
+        kbService.getByIdAndTenant(kbId, tenantId);
+        KnowledgeDocument doc = docRepo.findByIdAndKbId(docId, kbId)
+                .orElseThrow(() -> new RuntimeException("文档不存在"));
+        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
+            throw new IllegalArgumentException("该文档没有可重建的本地文件路径");
+        }
+        indexingPipeline.reindexAsync(docId);
+        return Map.of("status", "reindexing");
     }
 
     // ========== 多轮 RAG 问答 ==========

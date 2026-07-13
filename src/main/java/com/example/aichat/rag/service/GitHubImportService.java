@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -62,6 +63,9 @@ public class GitHubImportService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
+    @Value("${github.token:}")
+    private String githubToken;
+
     public GitHubImportService(ChunkService chunkService,
                                 VectorStoreService vectorStoreService,
                                 KnowledgeDocumentRepository documentRepo,
@@ -113,7 +117,7 @@ public class GitHubImportService {
     /**
      * 异步处理 GitHub 仓库导入
      */
-    @Async
+    @Async("ragIndexingExecutor")
     public void processAsync(Long docId, String githubUrl) {
         KnowledgeDocument doc = documentRepo.findById(docId).orElse(null);
         if (doc == null) return;
@@ -244,13 +248,20 @@ public class GitHubImportService {
     /**
      * 获取文件内容
      */
+    private HttpRequest.Builder authHeader(HttpRequest.Builder builder) {
+        if (githubToken != null && !githubToken.isBlank()) {
+            builder.header("Authorization", "Bearer " + githubToken);
+        }
+        return builder;
+    }
+
     private String fetchFileContent(String downloadUrl) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(downloadUrl))
                 .timeout(Duration.ofSeconds(10))
-                .header("User-Agent", "ai-chat-gateway")
-                .GET()
-                .build();
+                .header("User-Agent", "ai-chat-gateway");
+        authHeader(builder);
+        HttpRequest request = builder.GET().build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() == 200) {
             return response.body();
@@ -262,13 +273,13 @@ public class GitHubImportService {
      * 调用 GitHub API
      */
     private JsonNode apiGet(String url) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
                 .header("User-Agent", "ai-chat-gateway")
-                .header("Accept", "application/vnd.github.v3+json")
-                .GET()
-                .build();
+                .header("Accept", "application/vnd.github.v3+json");
+        authHeader(builder);
+        HttpRequest request = builder.GET().build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new RuntimeException("GitHub API 请求失败: HTTP " + response.statusCode()

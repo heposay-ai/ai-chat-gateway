@@ -6,7 +6,9 @@
       <span class="node-label">{{ data.label || 'Agent' }}</span>
     </div>
     <div class="node-body">
-      <div class="node-info" v-if="data.agentName">{{ data.agentName }}</div>
+      <div class="node-info" v-if="data.agentName || data.agentId">
+        {{ data.agentName || `Agent #${data.agentId}` }}
+      </div>
       <div class="node-info text-muted" v-else>点击配置 Agent</div>
     </div>
     <div class="node-status" v-if="data.executionStatus">

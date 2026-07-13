@@ -23,10 +23,10 @@ public class NodeExecution {
     @Column(length = 20)
     private String status = "PENDING";
 
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "longtext")
     private String input;
 
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "longtext")
     private String output;
 
     @Column(name = "started_at")

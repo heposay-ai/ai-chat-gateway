@@ -20,10 +20,10 @@ public class WorkflowExecution {
     @Column(length = 20)
     private String status = "RUNNING";
 
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "longtext")
     private String input;
 
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "longtext")
     private String output;
 
     @Column(name = "trigger_type", length = 20)

@@ -28,6 +28,9 @@ public class KnowledgeDocument {
     @Column(name = "file_size")
     private Long fileSize;
 
+    @Column(name = "file_hash", length = 64)
+    private String fileHash;
+
     @Column(name = "content_type", length = 100)
     private String contentType;
 
@@ -48,6 +51,9 @@ public class KnowledgeDocument {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Transient
+    private boolean duplicate;
 
     @PrePersist
     protected void onCreate() {

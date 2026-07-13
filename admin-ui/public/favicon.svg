@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">NEXUS CMD</title>
+  <defs>
+    <linearGradient id="nexus-mark" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14B8A6" />
+      <stop offset="0.52" stop-color="#F59E0B" />
+      <stop offset="1" stop-color="#F43F5E" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0A0E17" />
+  <rect x="5" y="5" width="54" height="54" rx="11" fill="none" stroke="#1E2D3D" stroke-width="2" />
+  <path d="M12 23v-8a3 3 0 0 1 3-3h8" fill="none" stroke="#F59E0B" stroke-width="3" stroke-linecap="round" />
+  <path d="M52 41v8a3 3 0 0 1-3 3h-8" fill="none" stroke="#F59E0B" stroke-width="3" stroke-linecap="round" />
+  <path d="M20 45V19l24 26V19" fill="none" stroke="url(#nexus-mark)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M28 32h8" fill="none" stroke="#E2E8F0" stroke-width="3" stroke-linecap="round" opacity="0.85" />
+</svg>

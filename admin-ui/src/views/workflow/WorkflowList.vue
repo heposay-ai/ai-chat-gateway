@@ -59,7 +59,7 @@
 
     <!-- 运行对话框 -->
     <el-dialog v-model="showRunDialog" title="运行工作流" width="500px">
-      <el-input v-model="runInput" placeholder="输入参数..." type="textarea" :rows="3" />
+      <el-input v-model="runInput" placeholder='输入要处理的内容，如"帮我分析一下最近销售数据"' type="textarea" :rows="3" />
       <template #footer>
         <el-button @click="showRunDialog = false">取消</el-button>
         <el-button type="primary" @click="doRun">执行</el-button>

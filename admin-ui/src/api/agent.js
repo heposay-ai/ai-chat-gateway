@@ -34,10 +34,10 @@ export const deleteAgentSession = (agentId, sessionId) =>
 
 // ========== 工作流 ==========
 
-export const listWorkflows = () => api.get('/workflows')
+export const listWorkflows = () => api.get('/agent-workflows')
 
-export const createWorkflow = (data) => api.post('/workflows', data)
+export const createWorkflow = (data) => api.post('/agent-workflows', data)
 
-export const updateWorkflow = (id, data) => api.put(`/workflows/${id}`, data)
+export const updateWorkflow = (id, data) => api.put(`/agent-workflows/${id}`, data)
 
-export const deleteWorkflow = (id) => api.delete(`/workflows/${id}`)
+export const deleteWorkflow = (id) => api.delete(`/agent-workflows/${id}`)

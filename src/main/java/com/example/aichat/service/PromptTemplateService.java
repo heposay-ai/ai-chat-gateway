@@ -30,13 +30,16 @@ public class PromptTemplateService {
     private final PromptTemplateRepository templateRepository;
     private final PromptTemplateVersionRepository versionRepository;
     private final TemplateFavoriteRepository favoriteRepository;
+    private final KbContextProvider kbContextProvider;
 
     public PromptTemplateService(PromptTemplateRepository templateRepository,
                                   PromptTemplateVersionRepository versionRepository,
-                                  TemplateFavoriteRepository favoriteRepository) {
+                                  TemplateFavoriteRepository favoriteRepository,
+                                  KbContextProvider kbContextProvider) {
         this.templateRepository = templateRepository;
         this.versionRepository = versionRepository;
         this.favoriteRepository = favoriteRepository;
+        this.kbContextProvider = kbContextProvider;
     }
 
     public PromptTemplate create(Long tenantId, PromptTemplateRequest request) {
@@ -91,11 +94,24 @@ public class PromptTemplateService {
     }
 
     /**
-     * 渲染模板：替换 {{variable}} 占位符
+     * 渲染模板：替换 {{variable}} 占位符，同时解析 {{kb:知识库名}} 知识库引用
+     */
+    public String render(Long templateId, Map<String, String> variables, String userQuery, Long tenantId) {
+        PromptTemplate template = getById(templateId);
+        String content = resolveKbPlaceholders(template.getContent(), userQuery, tenantId);
+        return renderTemplate(content, variables);
+    }
+
+    /**
+     * 渲染模板：替换 {{variable}} 占位符（不解析 KB 引用）
      */
     public String render(Long templateId, Map<String, String> variables) {
-        PromptTemplate template = getById(templateId);
-        return renderTemplate(template.getContent(), variables);
+        return render(templateId, variables, null, null);
+    }
+
+    private String resolveKbPlaceholders(String content, String userQuery, Long tenantId) {
+        if (userQuery == null || tenantId == null || content == null) return content;
+        return kbContextProvider.resolveKbPlaceholders(content, userQuery, tenantId, 8);
     }
 
     public String renderTemplate(String templateContent, Map<String, String> variables) {

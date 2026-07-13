@@ -85,7 +85,7 @@
         <el-form-item label="工具">
           <el-checkbox-group v-model="form.selectedTools">
             <el-checkbox v-for="tool in availableTools" :key="tool.name"
-                         :label="tool.displayName" :value="tool.name" />
+                         :label="tool.name">{{ tool.label }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>

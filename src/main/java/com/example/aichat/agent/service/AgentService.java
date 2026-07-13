@@ -115,9 +115,9 @@ public class AgentService implements CommandLineRunner {
                 "你是一个企业知识库专家。你可以查询知识库获取企业内部文档信息来回答问题。\n\n规则：\n- 基于知识库内容回答，不要编造\n- 如果知识库中没有相关信息，如实说明\n- 引用具体的文档来源",
                 "deepseek-chat", "[\"knowledge_base\"]");
 
-        createTemplate("全能助手", "具备联网搜索和知识库查询能力的全能AI助手", "\uD83E\uDD16",
-                "你是一个全能AI助手，同时具备联网搜索和知识库查询能力。\n\n规则：\n- 根据问题性质选择合适的工具\n- 企业内部问题优先查知识库，通用问题优先搜索互联网\n- 可以组合使用多个工具获取更完整的答案\n- 回答要准确、有条理",
-                "deepseek-chat", "[\"web_search\",\"knowledge_base\",\"url_reader\",\"current_time\"]");
+        createTemplate("全能助手", "具备联网搜索、知识库查询和MCP远程调用能力的全能AI助手", "\uD83E\uDD16",
+                "你是一个全能AI助手，同时具备联网搜索、知识库查询和MCP远程服务调用能力。\n\n规则：\n- 根据问题性质选择合适的工具\n- 企业内部问题优先查知识库，通用问题优先搜索互联网\n- 可以组合使用多个工具获取更完整的答案\n- 回答要准确、有条理",
+                "deepseek-chat", "[\"web_search\",\"knowledge_base\",\"url_reader\",\"current_time\",\"mcp\"]");
 
         log.info("[Agent初始化] 完成，创建了 3 个预设模板");
     }

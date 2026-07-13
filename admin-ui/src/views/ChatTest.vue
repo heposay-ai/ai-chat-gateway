@@ -12,8 +12,22 @@
           <el-option label="GPT-4o Mini" value="gpt-4o-mini" />
           <el-option label="Claude Sonnet" value="claude-sonnet" />
         </el-select>
+        <el-select v-model="kbId" size="small" style="width: 150px" clearable placeholder="引用知识库">
+          <el-option v-for="kb in kbList" :key="kb.id" :label="kb.name" :value="kb.id" />
+        </el-select>
+        <el-button size="small" @click="showConfig = !showConfig">
+          {{ showConfig ? '收起配置' : '自定义配置' }}
+        </el-button>
         <el-button size="small" @click="clearChat">清空</el-button>
       </div>
+    </div>
+
+    <!-- 自定义配置面板 -->
+    <div v-if="showConfig" class="nx-config-panel">
+      <el-input v-model="customBaseUrl" size="small" placeholder="Base URL（留空使用默认）" clearable style="flex: 2" />
+      <el-input v-model="customApiKey" size="small" placeholder="API Key（留空使用默认）" clearable show-password style="flex: 2" />
+      <el-input v-model="customModelName" size="small" placeholder="模型名称（留空使用默认）" clearable style="flex: 1" />
+      <el-button size="small" type="success" @click="saveConfig">保存</el-button>
     </div>
 
     <!-- 消息日志区 -->
@@ -34,7 +48,7 @@
         <div class="nx-log-body" :class="{ 'user-text': msg.role === 'user' }">
           <template v-if="msg.role === 'user'">{{ msg.content }}</template>
           <template v-else>
-            <span>{{ msg.content }}</span>
+            <div class="nx-markdown" v-html="renderMd(msg.content)"></div>
             <span v-if="i === messages.length - 1 && isStreaming" class="nx-log-cursor"></span>
           </template>
         </div>
@@ -52,13 +66,44 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted, watch } from 'vue'
+import { renderMarkdown } from '@/utils/markdown'
+import { listKbs } from '@/api/rag'
+
+const CHAT_STORAGE_KEY = 'nx-chat-test-messages'
+const MODEL_STORAGE_KEY = 'nx-chat-test-model'
+const KB_STORAGE_KEY = 'nx-chat-test-kb'
+const MAX_SAVED_MESSAGES = 100
 
 const messages = ref([])
 const inputMsg = ref('')
 const model = ref('deepseek-chat')
+const kbId = ref(null)
+const kbList = ref([])
 const isStreaming = ref(false)
 const messagesRef = ref(null)
+const showConfig = ref(false)
+const customBaseUrl = ref('')
+const customApiKey = ref('')
+const customModelName = ref('')
+
+function saveConfig() {
+  localStorage.setItem('chatModelConfig', JSON.stringify({
+    baseUrl: customBaseUrl.value,
+    apiKey: customApiKey.value,
+    modelName: customModelName.value
+  }))
+  showConfig.value = false
+}
+
+function normalizeMarkdown(text) {
+  if (!text) return ''
+  return text
+    .replace(/```([A-Za-z0-9_-]+)[ \t]+/g, '```$1\n')
+    .replace(/[ \t]+```/g, '\n```')
+}
+
+function renderMd(text) { return renderMarkdown(normalizeMarkdown(text)) }
 
 function now() {
   return new Date().toLocaleTimeString('en-GB', { hour12: false })
@@ -66,6 +111,27 @@ function now() {
 
 function clearChat() {
   messages.value = []
+  localStorage.removeItem(CHAT_STORAGE_KEY)
+}
+
+function loadChatState() {
+  const savedModel = localStorage.getItem(MODEL_STORAGE_KEY)
+  if (savedModel) model.value = savedModel
+
+  const savedKb = localStorage.getItem(KB_STORAGE_KEY)
+  if (savedKb) kbId.value = Number(savedKb)
+
+  try {
+    const savedMessages = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]')
+    if (Array.isArray(savedMessages)) messages.value = savedMessages
+  } catch (e) {
+    localStorage.removeItem(CHAT_STORAGE_KEY)
+  }
+}
+
+function saveChatState() {
+  const recentMessages = messages.value.slice(-MAX_SAVED_MESSAGES)
+  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(recentMessages))
 }
 
 function scrollToBottom() {
@@ -87,7 +153,12 @@ async function send() {
   const apiKey = localStorage.getItem('apiKey') || ''
 
   try {
-    const url = `/api/chat/stream?message=${encodeURIComponent(userMsg)}&model=${model.value}`
+    const params = new URLSearchParams({ message: userMsg, model: model.value })
+    if (kbId.value) params.set('kbId', kbId.value)
+    if (customBaseUrl.value) params.set('baseUrl', customBaseUrl.value)
+    if (customApiKey.value) params.set('apiKey', customApiKey.value)
+    if (customModelName.value) params.set('modelName', customModelName.value)
+    const url = `/api/chat/stream?${params.toString()}`
     const resp = await fetch(url, {
       headers: { 'Authorization': `Bearer ${apiKey}` }
     })
@@ -118,7 +189,11 @@ async function send() {
         try {
           const parsed = JSON.parse(data)
           const last = messages.value[messages.value.length - 1]
-          last.content += parsed.content || ''
+          if (parsed.error) {
+            last.content = `[错误] ${parsed.error}`
+          } else {
+            last.content += parsed.content || ''
+          }
           scrollToBottom()
         } catch (e) { /* ignore */ }
       }
@@ -129,6 +204,31 @@ async function send() {
     isStreaming.value = false
   }
 }
+
+async function fetchKbList() {
+  try {
+    kbList.value = await listKbs()
+  } catch (e) { /* ignore */ }
+}
+
+onMounted(() => {
+  loadChatState()
+  fetchKbList()
+  const saved = localStorage.getItem('chatModelConfig')
+  if (saved) {
+    try {
+      const config = JSON.parse(saved)
+      customBaseUrl.value = config.baseUrl || ''
+      customApiKey.value = config.apiKey || ''
+      customModelName.value = config.modelName || ''
+    } catch (e) { /* ignore */ }
+  }
+  scrollToBottom()
+})
+
+watch(messages, saveChatState, { deep: true })
+watch(model, value => localStorage.setItem(MODEL_STORAGE_KEY, value))
+watch(kbId, value => localStorage.setItem(KB_STORAGE_KEY, value != null ? String(value) : ''))
 </script>
 
 <style scoped>
@@ -181,6 +281,16 @@ async function send() {
   font-size: 32px;
   color: var(--nx-accent-amber);
   animation: nx-pulse 2s infinite;
+}
+
+.nx-config-panel {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--nx-bg-deep);
+  border: 1px solid var(--nx-border);
+  border-radius: 2px;
 }
 
 .nx-input-bar {

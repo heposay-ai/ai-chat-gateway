@@ -1,4 +1,5 @@
 import { ref, reactive } from 'vue'
+import { getExecutionDetail } from '@/api/workflow'
 
 /**
  * 工作流执行 SSE 监听
@@ -10,20 +11,35 @@ export function useWorkflowExecution() {
   const totalDuration = ref(0)
   const error = ref(null)
   const logs = ref([])
+  const finalOutput = ref('')
 
   const startExecution = async (workflowId, input) => {
     Object.keys(nodeStates).forEach(k => delete nodeStates[k])
     logs.value = []
     error.value = null
+    finalOutput.value = ''
     status.value = 'RUNNING'
     const startTime = Date.now()
 
     try {
+      const apiKey = localStorage.getItem('apiKey') || ''
       const response = await fetch(`/api/workflows/${workflowId}/execute`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': '1' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-Id': '1',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+        },
         body: JSON.stringify({ input }),
       })
+
+      if (!response.ok) {
+        const message = await readErrorMessage(response)
+        throw new Error(message || `执行请求失败 (${response.status})`)
+      }
+      if (!response.body) {
+        throw new Error('执行响应中没有可读取的数据流')
+      }
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -34,24 +50,63 @@ export function useWorkflowExecution() {
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()
-
-        let currentEvent = null
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.substring(7).trim()
-          } else if (line.startsWith('data: ')) {
-            const data = line.substring(6).trim()
-            handleEvent(currentEvent || 'message', data)
-            currentEvent = null
-          }
-        }
+        const blocks = buffer.split(/\r?\n\r?\n/)
+        buffer = blocks.pop()
+        blocks.forEach(processSseBlock)
       }
+      buffer += decoder.decode()
+      if (buffer.trim()) processSseBlock(buffer)
+
       totalDuration.value = Date.now() - startTime
+      if (status.value === 'COMPLETED' && executionId.value) {
+        await loadFinalOutput(executionId.value)
+      } else if (status.value === 'RUNNING') {
+        throw new Error('执行连接已结束，但未收到完成信号')
+      }
     } catch (e) {
       error.value = e.message
       status.value = 'FAILED'
+      totalDuration.value = Date.now() - startTime
+    }
+  }
+
+  const loadFinalOutput = async (id) => {
+    try {
+      const execution = await getExecutionDetail(id)
+      finalOutput.value = execution?.output || nodeStates.end?.output || ''
+    } catch {
+      finalOutput.value = nodeStates.end?.output || ''
+    }
+  }
+
+  const readErrorMessage = async (response) => {
+    const text = await response.text()
+    if (!text) return ''
+    try {
+      const data = JSON.parse(text)
+      return data?.error?.message || data?.message || text
+    } catch {
+      return text
+    }
+  }
+
+  const processSseBlock = (block) => {
+    let event = 'message'
+    const dataLines = []
+
+    for (const line of block.split(/\r?\n/)) {
+      if (!line || line.startsWith(':')) continue
+      const separator = line.indexOf(':')
+      const field = separator >= 0 ? line.substring(0, separator) : line
+      let value = separator >= 0 ? line.substring(separator + 1) : ''
+      if (value.startsWith(' ')) value = value.substring(1)
+
+      if (field === 'event') event = value.trim() || 'message'
+      if (field === 'data') dataLines.push(value)
+    }
+
+    if (dataLines.length > 0) {
+      handleEvent(event, dataLines.join('\n'))
     }
   }
 
@@ -105,5 +160,7 @@ export function useWorkflowExecution() {
     }
   }
 
-  return { executionId, status, nodeStates, totalDuration, error, logs, startExecution }
+  return {
+    executionId, status, nodeStates, totalDuration, error, logs, finalOutput, startExecution,
+  }
 }

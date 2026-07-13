@@ -10,6 +10,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.filter.MetadataFilterBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -24,6 +25,18 @@ public class VectorStoreService {
     private final EmbeddingStore<TextSegment> embeddingStore;
     private final EmbeddingModel embeddingModel;
 
+    @Value("${rag.embedding.batch-size:6}")
+    private int embeddingBatchSize;
+
+    @Value("${rag.embedding.batch-delay-ms:300}")
+    private long embeddingBatchDelayMs;
+
+    @Value("${rag.embedding.max-retries:3}")
+    private int embeddingMaxRetries;
+
+    @Value("${rag.embedding.retry-base-delay-ms:1000}")
+    private long embeddingRetryBaseDelayMs;
+
     public VectorStoreService(EmbeddingStore<TextSegment> embeddingStore,
                               EmbeddingModel embeddingModel) {
         this.embeddingStore = embeddingStore;
@@ -37,14 +50,15 @@ public class VectorStoreService {
         log.info("[向量存储] 开始向量化 {} 个片段", segments.size());
         List<String> allIds = new ArrayList<>();
 
-        // 分批处理，DashScope embedding API 限制每批最多 10 条，取 6 留余量
-        int batchSize = 6;
+        // 分批处理，DashScope embedding API 限制每批最多 10 条，默认取 6 留余量。
+        int batchSize = Math.max(1, embeddingBatchSize);
         for (int i = 0; i < segments.size(); i += batchSize) {
             int end = Math.min(i + batchSize, segments.size());
             List<TextSegment> batch = segments.subList(i, end);
 
             try {
-                List<Embedding> embeddings = embeddingModel.embedAll(batch).content();
+                throttleBeforeBatch(i);
+                List<Embedding> embeddings = embedBatchWithRetry(batch, i, end);
                 List<String> ids = embeddingStore.addAll(embeddings, batch);
                 allIds.addAll(ids);
                 log.debug("[向量存储] 已处理 {}/{} 个片段", end, segments.size());
@@ -56,6 +70,51 @@ public class VectorStoreService {
 
         log.info("[向量存储] 全部向量化完成: {} 个片段", segments.size());
         return allIds;
+    }
+
+    private List<Embedding> embedBatchWithRetry(List<TextSegment> batch, int start, int end) {
+        int maxRetries = Math.max(0, embeddingMaxRetries);
+        RuntimeException lastError = null;
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return embeddingModel.embedAll(batch).content();
+            } catch (RuntimeException e) {
+                lastError = e;
+                if (attempt >= maxRetries) {
+                    break;
+                }
+                long delay = retryDelay(attempt);
+                log.warn("[向量存储] 第 {}-{} 批次向量化失败，{}ms 后重试({}/{}): {}",
+                        start, end, delay, attempt + 1, maxRetries, e.getMessage());
+                sleep(delay);
+            }
+        }
+        throw lastError != null ? lastError : new RuntimeException("向量化失败");
+    }
+
+    private void throttleBeforeBatch(int start) {
+        if (start > 0 && embeddingBatchDelayMs > 0) {
+            sleep(embeddingBatchDelayMs);
+        }
+    }
+
+    private long retryDelay(int attempt) {
+        long baseDelay = Math.max(0, embeddingRetryBaseDelayMs);
+        if (baseDelay == 0) {
+            return 0;
+        }
+        long multiplier = 1L << Math.min(attempt, 6);
+        return baseDelay * multiplier;
+    }
+
+    private void sleep(long millis) {
+        if (millis <= 0) return;
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("向量化等待被中断", e);
+        }
     }
 
     /**
@@ -123,5 +182,23 @@ public class VectorStoreService {
         if (ids == null || ids.isEmpty()) return;
         embeddingStore.removeAll(new ArrayList<>(ids));
         log.info("[向量存储] 已删除 {} 个向量", ids.size());
+    }
+
+    /**
+     * 按文档 ID 删除向量。用于文档重建索引和删除清理。
+     */
+    public void removeByDocumentId(Long docId) {
+        if (docId == null) return;
+        embeddingStore.removeAll(new MetadataFilterBuilder("doc_id").isEqualTo(String.valueOf(docId)));
+        log.info("[向量存储] 已按 doc_id={} 删除向量", docId);
+    }
+
+    /**
+     * 按知识库 ID 删除向量。用于删除知识库时清理 PgVector 残留。
+     */
+    public void removeByKnowledgeBaseId(Long kbId) {
+        if (kbId == null) return;
+        embeddingStore.removeAll(new MetadataFilterBuilder("kb_id").isEqualTo(String.valueOf(kbId)));
+        log.info("[向量存储] 已按 kb_id={} 删除向量", kbId);
     }
 }

@@ -56,8 +56,8 @@ CREATE TABLE IF NOT EXISTS workflow_execution (
     workflow_id     BIGINT NOT NULL REFERENCES workflow_definition(id),
     tenant_id       BIGINT NOT NULL,
     status          VARCHAR(20) DEFAULT 'RUNNING',  -- RUNNING / COMPLETED / FAILED / PAUSED / CANCELLED
-    input           JSONB,
-    output          JSONB,
+    input           TEXT,
+    output          TEXT,
     trigger_type    VARCHAR(20),
     started_at      TIMESTAMP DEFAULT NOW(),
     finished_at     TIMESTAMP,
@@ -74,8 +74,8 @@ CREATE TABLE IF NOT EXISTS node_execution (
     node_key        VARCHAR(50) NOT NULL,
     node_type       VARCHAR(20) NOT NULL,
     status          VARCHAR(20) DEFAULT 'PENDING',  -- PENDING / RUNNING / COMPLETED / FAILED / SKIPPED
-    input           JSONB,
-    output          JSONB,
+    input           TEXT,
+    output          TEXT,
     started_at      TIMESTAMP,
     finished_at     TIMESTAMP,
     duration_ms     BIGINT,

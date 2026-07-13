@@ -17,7 +17,8 @@
         <template v-if="nodeType === 'AGENT'">
           <div class="form-group">
             <label>选择 Agent</label>
-            <el-select v-model="node.data.agentId" size="small" style="width: 100%" placeholder="选择 Agent">
+            <el-select v-model="node.data.agentId" size="small" style="width: 100%" placeholder="选择 Agent"
+              @change="handleAgentChange">
               <el-option v-for="a in agents" :key="a.id" :label="a.name" :value="a.id" />
             </el-select>
           </div>
@@ -43,6 +44,13 @@
           <div class="form-group">
             <label>输入模板</label>
             <el-input v-model="node.data.inputTemplate" size="small" placeholder="{{userInput}}" />
+          </div>
+          <div class="form-group" v-if="node.data.toolName === 'knowledge_base'">
+            <label>知识库</label>
+            <el-select v-model="node.data.knowledgeBaseId" size="small" style="width: 100%"
+              placeholder="选择知识库">
+              <el-option v-for="kb in knowledgeBases" :key="kb.id" :label="kb.name" :value="kb.id" />
+            </el-select>
           </div>
         </template>
 
@@ -83,8 +91,11 @@
         <!-- KNOWLEDGE 节点 -->
         <template v-if="nodeType === 'KNOWLEDGE'">
           <div class="form-group">
-            <label>知识库 ID</label>
-            <el-input v-model="node.data.knowledgeBaseId" size="small" placeholder="知识库 ID" />
+            <label>知识库</label>
+            <el-select v-model="node.data.knowledgeBaseId" size="small" style="width: 100%"
+              placeholder="选择知识库">
+              <el-option v-for="kb in knowledgeBases" :key="kb.id" :label="kb.name" :value="kb.id" />
+            </el-select>
           </div>
           <div class="form-group">
             <label>查询模板</label>
@@ -137,8 +148,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { listAgents } from '@/api/agent'
+import { listKbs } from '@/api/rag'
 
 const props = defineProps({
   node: { type: Object, default: null },
@@ -148,13 +160,38 @@ defineEmits(['close', 'delete'])
 const nodeType = computed(() => props.node?.data?.nodeType || '')
 
 const agents = ref([])
+const knowledgeBases = ref([])
 
 onMounted(async () => {
-  try {
-    const res = await listAgents()
+  const [agentResult, kbResult] = await Promise.allSettled([listAgents(), listKbs()])
+  if (agentResult.status === 'fulfilled') {
+    const res = agentResult.value
     agents.value = Array.isArray(res) ? res : (res.data || [])
-  } catch { /* ignore */ }
+  }
+  if (kbResult.status === 'fulfilled') {
+    const res = kbResult.value
+    knowledgeBases.value = Array.isArray(res) ? res : (res.data || [])
+  }
 })
+
+function handleAgentChange(agentId) {
+  const agent = agents.value.find(item => item.id === agentId)
+  nodeAgentName(agent?.name || '')
+}
+
+function nodeAgentName(name) {
+  if (props.node?.data) props.node.data.agentName = name
+}
+
+watch(
+  () => [props.node?.id, props.node?.data?.agentId, agents.value.length],
+  () => {
+    if (props.node?.data?.agentId) {
+      const agent = agents.value.find(item => item.id === props.node.data.agentId)
+      if (agent && props.node.data.agentName !== agent.name) nodeAgentName(agent.name)
+    }
+  }
+)
 </script>
 
 <style scoped>

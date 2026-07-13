@@ -25,6 +25,24 @@
       </div>
 
       <div class="exec-sidebar">
+        <!-- 最终结果 -->
+        <div v-if="status === 'COMPLETED'" class="result-panel">
+          <div class="result-header">
+            <div>
+              <div class="result-status nx-mono">执行完成</div>
+              <div class="result-duration nx-mono">{{ formatDuration(totalDuration) }}</div>
+            </div>
+            <el-button v-if="finalOutput" link size="small" @click="copyFinalOutput">复制结果</el-button>
+          </div>
+          <pre v-if="finalOutput" class="result-output">{{ finalOutput }}</pre>
+          <div v-else class="result-empty">执行已完成，暂无文本输出</div>
+        </div>
+
+        <div v-else-if="status === 'FAILED'" class="error-panel">
+          <div class="error-title nx-mono">执行失败</div>
+          <div class="error-message">{{ error || '工作流执行异常，请查看执行日志' }}</div>
+        </div>
+
         <!-- 节点详情 -->
         <div v-if="selectedNodeKey && nodeStates[selectedNodeKey]" class="node-detail-panel">
           <div class="detail-header">
@@ -75,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FlowCanvas from './components/FlowCanvas.vue'
@@ -89,7 +107,9 @@ const wfId = route.params.id
 const inputParam = route.query.input || ''
 
 const { nodes, edges, loadWorkflow } = useWorkflowEditor(wfId)
-const { executionId, status, nodeStates, totalDuration, logs, startExecution } = useWorkflowExecution()
+const {
+  executionId, status, nodeStates, totalDuration, error, logs, finalOutput, startExecution,
+} = useWorkflowExecution()
 
 const selectedNodeKey = ref(null)
 const approvalComment = ref('')
@@ -120,6 +140,20 @@ const pendingApproval = computed(() => {
 
 function showNodeDetail({ id }) {
   selectedNodeKey.value = id
+}
+
+function formatDuration(duration) {
+  if (!duration) return ''
+  return duration >= 1000 ? `${(duration / 1000).toFixed(1)} 秒` : `${duration} 毫秒`
+}
+
+async function copyFinalOutput() {
+  try {
+    await navigator.clipboard.writeText(finalOutput.value)
+    ElMessage.success('结果已复制')
+  } catch {
+    ElMessage.error('复制失败')
+  }
 }
 
 async function handleCancel() {
@@ -159,6 +193,11 @@ onMounted(async () => {
   if (inputParam || wfId) {
     startExecution(wfId, inputParam)
   }
+})
+
+watch(status, value => {
+  if (value === 'COMPLETED') ElMessage.success('工作流执行完成')
+  if (value === 'FAILED') ElMessage.error(error.value || '工作流执行失败')
 })
 </script>
 
@@ -221,6 +260,68 @@ onMounted(async () => {
   flex-direction: column;
   border-left: 1px solid var(--nx-border);
   flex-shrink: 0;
+}
+
+/* 最终结果 */
+.result-panel,
+.error-panel {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nx-border);
+  background: var(--nx-bg-surface);
+}
+
+.result-panel { border-left: 3px solid var(--nx-accent-teal); }
+.error-panel { border-left: 3px solid var(--nx-accent-rose); }
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.result-status {
+  color: var(--nx-accent-teal);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.result-duration {
+  color: var(--nx-text-muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.result-output {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--nx-bg-raised);
+  color: var(--nx-text-primary);
+  border: 1px solid var(--nx-border);
+  border-radius: 4px;
+  font-family: var(--nx-font-mono);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.result-empty,
+.error-message {
+  color: var(--nx-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.error-title {
+  color: var(--nx-accent-rose);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 /* 节点详情 */
